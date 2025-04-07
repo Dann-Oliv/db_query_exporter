@@ -46,7 +46,7 @@ Este script é uma ferramenta para se conectar em múltiplas databases e extrair
 
 - Ex: ["database1","database2","database3"]
 
-2. Insira a consulta desejada no arquivo "quey/query.sql".
+2. Remova o "example-" no arquivo dentro da pasta "query" e em seguida insira a consulta desejada no arquivo "query.sql".
 
 - Ex: "Select nome from usuarios"
 
