@@ -1,0 +1,9 @@
+{
+    "db_type": "informe-o-tipo-de-banco",
+    "host":"Insira-o-hostname",
+    "port":5432,
+    "user":"Insira-o-user",
+    "password":"Insira-a-senha",
+    "database":"Insira-a-database-padrao",
+    "databases":["Insira-as-databases-para-rodar-o-script"]
+}
