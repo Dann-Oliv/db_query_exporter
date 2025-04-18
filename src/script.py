@@ -31,7 +31,7 @@ if not os.path.exists(pathExcel):
     
 # 4. Tenta abrir o JSON com os dados do banco de dados:
 try:
-    with open('config/conn.json','r') as json_file:
+    with open('conn.json','r') as json_file:
         json_data = json.load(json_file)
         print("Arquivo JSON carregado !\n")
 
