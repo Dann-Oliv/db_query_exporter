@@ -1,6 +1,5 @@
-conn.json
-query.sql
-results
+conn.yaml
+
 
 
 # Byte-compiled / optimized / DLL files

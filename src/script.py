@@ -1,120 +1,126 @@
-# Copyright (C) 2025 by Danilo Oliveira
+# Author: Danilo Oliveira (https://github.com/Dann-Oliv)
 # o intuito deste script é acessar databases diferentes mas com estruturas iguais
 # e gerar de forma rápida planilhas com o resultado do SELECT inserido
 # Compatível com MySql e PostgreSQL
 
-# Módulos importados em ordem alfabética (por quê tenho TOC)
-from datetime import date
-from sqlalchemy import create_engine
-from sqlalchemy import text
-import json
 import os
-import pandas as pd
+import yaml
 import platform
-from urllib.parse import quote_plus
+import urllib.parse
+import pandas as pd
 
-# 1. Identifica qual é o sistema operacional usado:
-actual_os = platform.system()
-print(f"Sistema operacional: {actual_os}\n")
+from pathlib import Path
+from datetime import date
+from sqlalchemy import text
+from sqlalchemy import create_engine
 
-# 2. Identifica o diretório atual no qual o programa está sendo executado:
-actual_dir = os.getcwd()
-print(F"Diretório atual: {actual_dir}\n")
 
-# 3. Define o caminho onde as planilhas serão salvas de acordo com o sistema operacional:
-pathExcel = os.path.join(actual_dir, 'results')
+def load_credentials(file_name, conn_name: str) -> dict:
+    """
+    Carrega as credenciais que serão usadas para acessar o banco de dados.
 
-# 3.1 Verifica se a pasta existe, caso não, cria a pasta.
-if not os.path.exists(pathExcel):
-    print("Criando pasta para armazenar as planilhas...\n")
-    os.makedirs(pathExcel)
-    
-# 4. Tenta abrir o JSON com os dados do banco de dados:
-try:
-    with open('conn.json','r') as json_file:
-        json_data = json.load(json_file)
-        print("Arquivo JSON carregado !\n")
+    Args:
+        file_name (str): Nome do arquivo yaml com as credencias.
+        conn_name (str): Nome da conexão no arquivo yaml, ex: "AWS","Banco_Teste"
 
-except FileNotFoundError:    # Captura o erro de não encontrar o arquivo
-    raise SystemExit("Erro: Arquivo JSON não encontrado.")
 
-except json.JSONDecodeError: # Captura o erro de JSON inválido
-    raise SystemExit("Erro: Arquivo JSON inválido.")
+    Returns:
+        dict: Dicionário com as credencias de acesso ao banco de dados.
+    """
 
-except PermissionError:      # Captura o erro de Permissão 
-    raise SystemExit("Erro: Permissão de acesso negada para o arquivo JSON.")
+    if not os.path.isfile(file_name):
+        raise Exception("Arquivo de conexão não encontrado!")
 
-except Exception as e:       # Captura qualquer erro inesperado
-    raise SystemExit(f"Erro inesperado: {e}")
+    with open(file_name, "r") as conn_file:
+        credentials = yaml.safe_load(conn_file)
 
-# 5. Tenta abrir o arquivo com a query a ser executada no banco de dados:
-try:
-    with open('sql/query.sql', 'r') as query_file:
+    if conn_name not in credentials["databases"]:
+        raise Exception("O nome da conexão inserida não foi encontrada!")
+
+    return credentials["databases"][conn_name]
+
+
+def load_query(query_file_name) -> str:
+    """
+    Carrega a query inserida no arquivo desejado.
+
+    Args:
+        query_file (str): Nome do arquivo com a query
+
+    Returns:
+    str: String com a query que foi escrita no arquivo selecionado.
+    """
+
+    query_file_path = Path(f"{os.getcwd()}/sql/{query_file_name}")
+
+    if not os.path.isfile(query_file_path):
+        raise Exception("Arquivo com a query não encontrado!")
+
+    with open(query_file_path, "r") as query_file:
         query = query_file.read()
-        print("Arquivo SQL carregado !\n")
 
-except FileNotFoundError:    # Captura o erro de não encontrar o arquivo
-    raise SystemExit("Erro: Arquivo não encontrado.")
+    if not query:
+        raise Exception("Arquivo de query está vazio!")
 
-except PermissionError:      # Captura o erro de Permissão 
-    raise SystemExit("Erro: Permissão de acesso negada para o arquivo.")
-
-except Exception as e:       # Captura qualquer erro inesperado
-    raise SystemExit(f"Erro inesperado: {e}")
-
-# 6. Criando a string de conexão com o SqlAlchemy de acordo com o tipo de banco escolhido (mysql - postgres):
-db_type = json_data['db_type'].lower() # Pega o tipo de banco de dados informado no JSON
-
-if (db_type == 'postgres'):
-    # Padrão da engine: postgresql+psycopg2://username:password@host:port/database
-    driver = "postgresql+psycopg2"
-
-    engine = create_engine(f"{driver}://{json_data['user']}:{json_data['password']}@{json_data['host']}:{json_data['port']}/{json_data['database']}")
-
-elif (db_type == 'mysql'):
-    # Padrão da engine: mysql+mysqldb://username:password@host:port/database
-    driver = "mysql+mysqldb"
-
-    engine = create_engine(f"{driver}://{json_data['user']}:{json_data['password']}@{json_data['host']}:{json_data['port']}/{json_data['database']}")
-
-else:
-    raise SystemExit("Erro: O tipo de banco de dados escolhido não é suportado.")
-
-# 7. Função para verificar se o banco de dados é válido:
-def verify_conn():
-    try:
-        with engine.connect() as connection:
-            print(f"Conexão com banco de dados bem-sucedida !\n")
-            return True
-    
-    except Exception as e:
-        raise SystemExit(f"Erro: {e}")    
-
-# 8. Se os dados de conexão forem válidos, acessa o banco de dados e executa a query.
-if verify_conn() == True:
-    # Executa as instruções para cada uma das databases
-    for database in json_data["databases"]:
-
-        print(f"Executando script na database: {database}\n")
-
-        # Monta a engine separada para cada uma das databases
-        engine = create_engine(f"{driver}://{json_data['user']}:{quote_plus(json_data['password'])}@{json_data['host']}:{json_data['port']}/{database}")
-
-        # Executa a query no banco de dados e gera um dataframe
-        try:
-            # Executa a query
-            query_result = pd.read_sql(text(query),engine)
-
-            # Gera o dataframe do resultado
-            df = pd.DataFrame(query_result)
-
-            # Coloca o resultado em uma planilha
-            df.to_excel(os.path.join(pathExcel,f"{database}_{date.today()}.xlsx"),index=False)
-        
-            print(f"Planilha com os resultados gerada com sucesso !\n")
+    return query
 
 
-        except Exception as e:
-            print(f"Ocorreu um erro na database {database}: {e} ")
-            continue
-        
+def get_sqlalchemy_conn_string(credentials: dict, target_database: str) -> str:
+    """
+    Cria a string de conexão do sqlalchemy.
+
+    Args:
+        credentials (dict): Dicionário com o host, username, password, port, engine.
+        target_database (str): Nome da database em especifo para incluir na string de conexão.
+
+    Returns:
+        str: String de conexão de acordo com o tipo de banco de dados.
+
+
+    """
+    host = credentials["host"]
+    port = credentials["port"]
+    username = credentials["username"]
+    password = credentials["password"]
+
+    match credentials["engine"]:
+        case "postgres":
+            conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database}"
+            return conn_string
+
+        case "mysql":
+            conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database}"
+            return conn_string
+
+        case "sqlserver":
+            conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
+            return conn_string
+
+    return "A engine inserida não é válida"
+
+
+def main():
+    while True:
+        # Limpa o terminal ao executar o script.
+        if platform.system() == "Windows":
+            os.system("cls")
+        else:
+            os.system("clear")
+
+        target_database = input("Insira o nome da database: ")
+
+        credentials = load_credentials("conn.yaml", target_database)
+
+        query_file = input("Insira o nome do arquivo com a query a ser executada: ")
+
+        query = load_query(query_file)
+
+        keep_execution = input("Deseja continuar? (y/n)")
+
+        if keep_execution.lower() == "n":
+            print("Encerrando...")
+            break
+
+
+if __name__ == "__main__":
+    main()
