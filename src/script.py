@@ -6,13 +6,13 @@
 import os
 import yaml
 import platform
+import sqlalchemy
 import urllib.parse
 import pandas as pd
 
+from sqlalchemy import text
 from pathlib import Path
 from datetime import date
-from sqlalchemy import text
-from sqlalchemy import create_engine
 
 
 def load_credentials(file_name, conn_name: str) -> dict:
@@ -65,13 +65,14 @@ def load_query(query_file_name) -> str:
     return query
 
 
-def get_sqlalchemy_conn_string(credentials: dict, target_database: str) -> str:
+def get_sqlalchemy_engine(
+    credentials: dict, target_database=None
+) -> sqlalchemy.engine.Engine:
     """
     Cria a string de conexão do sqlalchemy.
 
     Args:
         credentials (dict): Dicionário com o host, username, password, port, engine.
-        target_database (str): Nome da database em especifo para incluir na string de conexão.
 
     Returns:
         str: String de conexão de acordo com o tipo de banco de dados.
@@ -80,23 +81,48 @@ def get_sqlalchemy_conn_string(credentials: dict, target_database: str) -> str:
     """
     host = credentials["host"]
     port = credentials["port"]
+    database = credentials["database"]
     username = credentials["username"]
     password = credentials["password"]
 
+    conn_string = ""
+
     match credentials["engine"]:
         case "postgres":
-            conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database}"
-            return conn_string
+            conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
+            return sqlalchemy.create_engine(conn_string)
 
         case "mysql":
-            conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database}"
-            return conn_string
+            conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
+            return sqlalchemy.create_engine(conn_string)
 
         case "sqlserver":
-            conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
-            return conn_string
+            conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
+            return sqlalchemy.create_engine(conn_string)
 
-    return "A engine inserida não é válida"
+    return sqlalchemy.create_engine(conn_string)
+
+
+def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
+    query = """
+    SELECT  (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] AS nome_databases
+    FROM "CONTROLE_EMPRESAS"
+    WHERE "CTE_COD_SIS" IN (3,10) 
+    AND "CTE_DT_LIMITE" > NOW() 
+    AND "CTE_STRINGPGSQL" IS NOT NULL
+    AND (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] != 'teste'
+    ORDER BY (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1]
+    LIMIT 1
+    """
+    all_databases = []
+
+    with engine.connect() as conn:
+        results = conn.execute(text(query))
+
+    for result in results:
+        all_databases.append(result)
+
+    return all_databases
 
 
 def main():
@@ -107,13 +133,26 @@ def main():
         else:
             os.system("clear")
 
-        target_database = input("Insira o nome da database: ")
+        target_database = input("Informe a database: ")
+
+        query_file = input("Informe o nome do arquivo com a query: ")
 
         credentials = load_credentials("conn.yaml", target_database)
 
-        query_file = input("Insira o nome do arquivo com a query a ser executada: ")
-
         query = load_query(query_file)
+
+        engine = get_sqlalchemy_engine(credentials)
+
+        all_databases = get_all_databases(engine)
+
+        for database in all_databases:
+            engine = get_sqlalchemy_engine(credentials, database)
+
+            with engine.connect() as conn:
+                results = pd.read_sql(query, conn)
+
+                if results.empty:
+                    print("Dataframe vazio")
 
         keep_execution = input("Deseja continuar? (y/n)")
 
