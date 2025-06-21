@@ -12,7 +12,7 @@ import pandas as pd
 
 from sqlalchemy import text
 from pathlib import Path
-from datetime import date
+from datetime import datetime
 
 
 def load_credentials(file_name, conn_name: str) -> dict:
@@ -51,7 +51,7 @@ def load_query(query_file_name) -> str:
     str: String com a query que foi escrita no arquivo selecionado.
     """
 
-    query_file_path = Path(f"{os.getcwd()}/sql/{query_file_name}")
+    query_file_path = Path(f"{os.getcwd()}/queries/{query_file_name}")
 
     if not os.path.isfile(query_file_path):
         raise Exception("Arquivo com a query não encontrado!")
@@ -69,13 +69,13 @@ def get_sqlalchemy_engine(
     credentials: dict, target_database=None
 ) -> sqlalchemy.engine.Engine:
     """
-    Cria a string de conexão do sqlalchemy.
+    Cria a engine de conexão do sqlalchemy.
 
     Args:
-        credentials (dict): Dicionário com o host, username, password, port, engine.
+        credentials (dict): Dicionário com o host, username, password, port, database, engine.
 
     Returns:
-        str: String de conexão de acordo com o tipo de banco de dados.
+        str: Engine de conexão de acordo com o tipo de banco de dados.
 
 
     """
@@ -104,6 +104,7 @@ def get_sqlalchemy_engine(
 
 
 def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
+    # Query para pegar todos os bancos de produçãio ativos no integrador.
     query = """
     SELECT  (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] AS nome_databases
     FROM "CONTROLE_EMPRESAS"
@@ -123,6 +124,20 @@ def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
         all_databases.append(result)
 
     return all_databases
+
+
+def export_to_excel(dataframe: pd.DataFrame, sheet_name: str):
+    sheet_path = Path(f"{os.getcwd()}/out")
+
+    if not os.path.isdir(sheet_path):
+        os.mkdir(sheet_path)
+        raise Exception("Criando pasta para salvar planilhas")
+
+    dataframe.to_excel(
+        excel_writer=f"{sheet_path}/{sheet_name}_{datetime.now()}.xlsx",
+        sheet_name="Results",
+        index=False,
+    )
 
 
 def main():
@@ -152,7 +167,10 @@ def main():
                 results = pd.read_sql(query, conn)
 
                 if results.empty:
-                    print("Dataframe vazio")
+                    print(f"Nenhum resultado encontrado em: {database}")
+                    continue
+
+                export_to_excel(dataframe=results, sheet_name=database)
 
         keep_execution = input("Deseja continuar? (y/n)")
 
