@@ -5,6 +5,7 @@
 
 import os
 import yaml
+import logging
 import platform
 import sqlalchemy
 import urllib.parse
@@ -13,6 +14,10 @@ import pandas as pd
 from sqlalchemy import text
 from pathlib import Path
 from datetime import datetime
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def load_credentials(file_name, conn_name: str) -> dict:
@@ -29,14 +34,17 @@ def load_credentials(file_name, conn_name: str) -> dict:
     """
 
     if not os.path.isfile(file_name):
-        raise Exception("Arquivo de conexão não encontrado!")
+        logging.error("Arquivo de conexão não encontrado!")
+        raise SystemExit()
 
     with open(file_name, "r") as conn_file:
         credentials = yaml.safe_load(conn_file)
 
     if conn_name not in credentials["databases"]:
-        raise Exception("O nome da conexão inserida não foi encontrada!")
+        logging.error("O nome da conexão inserida não foi encontrada!")
+        raise SystemExit()
 
+    logging.info("Arquivo de conexão carregado!")
     return credentials["databases"][conn_name]
 
 
@@ -54,14 +62,16 @@ def load_query(query_file_name) -> str:
     query_file_path = Path(f"{os.getcwd()}/queries/{query_file_name}")
 
     if not os.path.isfile(query_file_path):
-        raise Exception("Arquivo com a query não encontrado!")
+        logging.error("Arquivo com a query não encontrado!")
+        raise SystemExit
 
     with open(query_file_path, "r") as query_file:
         query = query_file.read()
 
     if not query:
-        raise Exception("Arquivo de query está vazio!")
+        logging.warning("Arquivo de query está vazio!")
 
+    logging.info("Query carregada com sucesso!")
     return query
 
 
@@ -90,16 +100,20 @@ def get_sqlalchemy_engine(
     match credentials["engine"]:
         case "postgres":
             conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
+            logging.info("Erro ao criar engine!")
             return sqlalchemy.create_engine(conn_string)
 
         case "mysql":
             conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
+            logging.info("Erro ao criar engine!")
             return sqlalchemy.create_engine(conn_string)
 
         case "sqlserver":
             conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
+            logging.info("Erro ao criar engine!")
             return sqlalchemy.create_engine(conn_string)
 
+    logging.warning("Erro ao criar engine!")
     return sqlalchemy.create_engine(conn_string)
 
 
@@ -119,25 +133,30 @@ def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
 
     with engine.connect() as conn:
         results = conn.execute(text(query))
+        logging.info(f"Conexão feita com sucesso em: {engine}")
 
     for result in results:
         all_databases.append(result)
 
+    logging.info("Databases coletadas com sucesso!")
     return all_databases
 
 
 def export_to_excel(dataframe: pd.DataFrame, sheet_name: str):
-    sheet_path = Path(f"{os.getcwd()}/out")
+    sheet_folder = Path(f"{os.getcwd()}/out")
+    full_path = f"{sheet_folder}/{sheet_name}_{datetime.now()}.xlsx"
 
-    if not os.path.isdir(sheet_path):
-        os.mkdir(sheet_path)
-        raise Exception("Criando pasta para salvar planilhas")
+    if not os.path.isdir(sheet_folder):
+        os.mkdir(sheet_folder)
+        logging.warning("Caminho para salvar planilhas não existe!")
+        logging.info(f"Criando pasta para salvar planilhas: {sheet_folder}")
 
     dataframe.to_excel(
-        excel_writer=f"{sheet_path}/{sheet_name}_{datetime.now()}.xlsx",
+        excel_writer=full_path,
         sheet_name="Results",
         index=False,
     )
+    logging.info(f"Planilha salva com sucesso em: {full_path}")
 
 
 def main():
