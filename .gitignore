@@ -1,5 +1,6 @@
+log.txt
 conn.yaml
-queries/
+sql/
 /out
 
 # Byte-compiled / optimized / DLL files

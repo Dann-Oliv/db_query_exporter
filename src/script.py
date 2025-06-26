@@ -3,20 +3,25 @@
 # e gerar de forma rápida planilhas com o resultado do SELECT inserido
 # Compatível com MySql e PostgreSQL
 
-import os
-import yaml
 import logging
+import os
 import platform
-import sqlalchemy
 import urllib.parse
-import pandas as pd
-
-from sqlalchemy import text
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import sqlalchemy
+import yaml
+from sqlalchemy import text
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("log.txt", mode="w"),
+        logging.StreamHandler(),
+    ],
 )
 
 
@@ -30,7 +35,7 @@ def load_credentials(file_name, conn_name: str) -> dict:
 
 
     Returns:
-        dict: Dicionário com as credencias de acesso ao banco de dados.
+        dict: Dicionário com as credenciais de acesso ao banco de dados.
     """
 
     if not os.path.isfile(file_name):
@@ -59,7 +64,7 @@ def load_query(query_file_name) -> str:
     str: String com a query que foi escrita no arquivo selecionado.
     """
 
-    query_file_path = Path(f"{os.getcwd()}/queries/{query_file_name}")
+    query_file_path = Path(f"{os.getcwd()}/sql/{query_file_name}")
 
     if not os.path.isfile(query_file_path):
         logging.error("Arquivo com a query não encontrado!")
@@ -83,6 +88,7 @@ def get_sqlalchemy_engine(
 
     Args:
         credentials (dict): Dicionário com o host, username, password, port, database, engine.
+        target_database (str, optional): Nome do banco de dados alvo. Se não fornecido, usa o banco de dados padrão das credenciais.
 
     Returns:
         str: Engine de conexão de acordo com o tipo de banco de dados.
@@ -100,25 +106,27 @@ def get_sqlalchemy_engine(
     match credentials["engine"]:
         case "postgres":
             conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
-            logging.info("Erro ao criar engine!")
+            logging.info(
+                f"Criando engine Postgres para : {target_database or database}"
+            )
             return sqlalchemy.create_engine(conn_string)
 
         case "mysql":
             conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
-            logging.info("Erro ao criar engine!")
+            logging.info(f"Criando engine MySQL para: {target_database or database}")
             return sqlalchemy.create_engine(conn_string)
 
-        case "sqlserver":
-            conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
-            logging.info("Erro ao criar engine!")
-            return sqlalchemy.create_engine(conn_string)
+        # case "sqlserver":
+        #     conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
+        #     logging.info(f"Criando engine para SQL Server: {conn_string}")
+        #     return sqlalchemy.create_engine(conn_string)
 
-    logging.warning("Erro ao criar engine!")
-    return sqlalchemy.create_engine(conn_string)
+    logging.error("Tipo de engine não reconhecido!")
+    raise SystemExit("Tipo de engine não reconhecido: {}".format(credentials["engine"]))
 
 
 def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
-    # Query para pegar todos os bancos de produçãio ativos no integrador.
+    # Query para pegar todos os bancos de produção ativos no integrador.
     query = """
     SELECT  (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] AS nome_databases
     FROM "CONTROLE_EMPRESAS"
@@ -127,29 +135,32 @@ def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
     AND "CTE_STRINGPGSQL" IS NOT NULL
     AND (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] != 'teste'
     ORDER BY (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1]
-    LIMIT 1
+    -- LIMIT 1
     """
     all_databases = []
 
-    with engine.connect() as conn:
-        results = conn.execute(text(query))
-        logging.info(f"Conexão feita com sucesso em: {engine}")
+    try:
+        with engine.connect() as conn:
+            results = conn.execute(text(query))
+            logging.info(f"Conexão feita com sucesso em: {engine}")
 
-    for result in results:
-        all_databases.append(result)
+            for result in results:
+                all_databases.append(result[0])
 
-    logging.info("Databases coletadas com sucesso!")
+        logging.info("Databases coletadas com sucesso!")
+
+    except Exception as e:
+        logging.error(f"Erro ao coletar databases: {e}")
+
     return all_databases
 
 
 def export_to_excel(dataframe: pd.DataFrame, sheet_name: str):
     sheet_folder = Path(f"{os.getcwd()}/out")
-    full_path = f"{sheet_folder}/{sheet_name}_{datetime.now()}.xlsx"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    full_path = Path(f"{sheet_folder}/{sheet_name}_{timestamp}.xlsx")
 
-    if not os.path.isdir(sheet_folder):
-        os.mkdir(sheet_folder)
-        logging.warning("Caminho para salvar planilhas não existe!")
-        logging.info(f"Criando pasta para salvar planilhas: {sheet_folder}")
+    os.makedirs(sheet_folder, exist_ok=True)
 
     dataframe.to_excel(
         excel_writer=full_path,
@@ -157,6 +168,22 @@ def export_to_excel(dataframe: pd.DataFrame, sheet_name: str):
         index=False,
     )
     logging.info(f"Planilha salva com sucesso em: {full_path}")
+
+
+def get_data_from_db(engine: sqlalchemy.engine.Engine, query: str) -> pd.DataFrame:
+    try:
+        with engine.connect() as conn:
+            results = pd.read_sql(query, conn)
+
+            if results.empty:
+                logging.warning("Nenhum resultado encontrado para a query.")
+                return pd.DataFrame()
+
+            return results
+
+    except Exception as e:
+        logging.error(f"Erro ao consultar dados: {e}")
+        return pd.DataFrame()
 
 
 def main():
@@ -167,36 +194,72 @@ def main():
         else:
             os.system("clear")
 
-        target_database = input("Informe a database: ")
+        conn_name = input("Informe o nome da conexão no YAML: ").strip()
+        query_file = input("Informe o nome do arquivo com a query: ").strip()
+        unify_results = (
+            input("Deseja salvar os resultados em um único arquivo? (y/n): ")
+            .strip()
+            .lower()
+        )
 
-        query_file = input("Informe o nome do arquivo com a query: ")
-
-        credentials = load_credentials("conn.yaml", target_database)
-
+        credentials = load_credentials("conn.yaml", conn_name)
         query = load_query(query_file)
 
         engine = get_sqlalchemy_engine(credentials)
-
         all_databases = get_all_databases(engine)
 
-        for database in all_databases:
-            engine = get_sqlalchemy_engine(credentials, database)
+        if unify_results == "y":
+            dataframes = []
 
-            with engine.connect() as conn:
-                results = pd.read_sql(query, conn)
+            for database in all_databases:
+                engine = get_sqlalchemy_engine(credentials, database)
 
-                if results.empty:
-                    print(f"Nenhum resultado encontrado em: {database}")
+                try:
+                    results = get_data_from_db(engine, query)
+
+                    if not results.empty:
+                        results["database"] = database
+                        dataframes.append(results)
+
+                except Exception as e:
+                    logging.error(
+                        f"Erro ao consultar dados da database {database}: {e}"
+                    )
                     continue
 
-                export_to_excel(dataframe=results, sheet_name=database)
+            if dataframes:
+                final_df = pd.concat(dataframes, ignore_index=True)
+                export_to_excel(dataframe=final_df, sheet_name="Resultados_Agrupados")
 
-        keep_execution = input("Deseja continuar? (y/n)")
+            else:
+                print("Nenhum resultado encontrado em nenhuma database.")
+        else:
+            for database in all_databases:
+                engine = get_sqlalchemy_engine(credentials, database)
 
+                try:
+                    results = get_data_from_db(engine, query)
+
+                    if not results.empty:
+                        export_to_excel(dataframe=results, sheet_name=database)
+
+                    else:
+                        print(f"Nenhum resultado encontrado em: {database}")
+
+                except Exception as e:
+                    logging.error(
+                        f"Erro ao consultar ou exportar dados da database {database}: {e}"
+                    )
+                    continue
+
+        keep_execution = input("Script encerrado. Deseja reiniciar? (y/n)")
         if keep_execution.lower() == "n":
             print("Encerrando...")
             break
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nExecução interrompida. Encerrando...")
