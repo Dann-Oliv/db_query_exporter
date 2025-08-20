@@ -13,10 +13,9 @@ Este projeto tem como objetivo acessar múltiplos bancos de dados (PostgreSQL, M
 ├── conn.yaml                # Arquivo de credenciais
 ├── conn-example.yaml        # Exemplo de configuração de credenciais
 ├── requirements.txt         # Dependências do projeto
+├── main.py                  # Script principal
 ├── sql/
 │   └── exemplo.sql          # Exemplo de query SQL
-├── src/
-│   └── script.py            # Script principal
 └── out/                     # (Gerado) Planilhas exportadas
 ```
 
@@ -36,7 +35,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 ### 2. Configure as credenciais
-Crie um arquivo `conn.yaml` baseado no exemplo `conn-example.yaml`:
+Crie um arquivo `conn_profiles.yaml` baseado no exemplo `conn_profiles.example.yaml`:
 ```yaml
 databases:
   nome_conexao:
@@ -53,11 +52,11 @@ Salve sua consulta SQL na pasta `sql/` (ex: `minha_query.sql`).
 
 ### 4. Execute o script
 ```bash
-python src/script.py
+python main.py
 ```
 
 O script irá solicitar:
-- Nome da conexão (conforme definido no `conn.yaml`)
+- Nome da conexão (conforme definido no `conn_profiles.yaml`)
 - Nome do arquivo com a query (ex: `minha_query.sql`)
 - Se deseja agrupar os resultados em um único arquivo Excel
 
