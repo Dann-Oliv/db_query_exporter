@@ -31,7 +31,7 @@ def load_credentials(file_name, conn_name: str) -> dict:
 
     Args:
         file_name (str): Nome do arquivo yaml com as credencias.
-        conn_name (str): Nome da conexão no arquivo yaml, ex: "AWS","Banco_Teste"
+        conn_name (str): Nome da conexão no arquivo yaml, ex: "Localhost","Banco_Teste"
 
 
     Returns:
@@ -67,7 +67,7 @@ def load_query(query_file_name) -> str:
     query_file_path = Path(f"{os.getcwd()}/sql/{query_file_name}")
 
     if not os.path.isfile(query_file_path):
-        logging.error("Arquivo com a query não encontrado!")
+        logging.warning("Arquivo com a query não encontrado!")
         raise SystemExit
 
     with open(query_file_path, "r") as query_file:
@@ -106,22 +106,16 @@ def get_sqlalchemy_engine(
     match credentials["engine"]:
         case "postgres":
             conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
-            logging.info(
+            logging.debug(
                 f"Criando engine Postgres para : {target_database or database}"
             )
             return sqlalchemy.create_engine(conn_string)
 
         case "mysql":
             conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
-            logging.info(f"Criando engine MySQL para: {target_database or database}")
+            logging.debug(f"Criando engine MySQL para: {target_database or database}")
             return sqlalchemy.create_engine(conn_string)
 
-        # case "sqlserver":
-        #     conn_string = f"mssql+pyodbc://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}?driver=ODBC Driver 18 for SQL Server&TrustServerCertificate=yes"
-        #     logging.info(f"Criando engine para SQL Server: {conn_string}")
-        #     return sqlalchemy.create_engine(conn_string)
-
-    logging.error("Tipo de engine não reconhecido!")
     raise SystemExit("Tipo de engine não reconhecido: {}".format(credentials["engine"]))
 
 
@@ -202,7 +196,7 @@ def main():
             .lower()
         )
 
-        credentials = load_credentials("conn.yaml", conn_name)
+        credentials = load_credentials("conn_profiles.yaml", conn_name)
         query = load_query(query_file)
 
         engine = get_sqlalchemy_engine(credentials)
