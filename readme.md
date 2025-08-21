@@ -1,6 +1,6 @@
 # Query Results To Excel
 
-Este projeto tem como objetivo acessar múltiplos bancos de dados (PostgreSQL, MySQL) com estruturas iguais, executar uma consulta SQL e exportar os resultados para arquivos Excel (.xlsx). É possível agrupar os resultados de todas as bases em um único arquivo ou gerar um arquivo para cada base.
+Este projeto tem como objetivo acessar múltiplos bancos de dados (Dentro de uma instância PostgreSQL ou MySQL) com estruturas iguais, executar uma consulta SQL e exportar os resultados para arquivos Excel (.xlsx). É possível agrupar os resultados de todas as bases em um único arquivo ou gerar um arquivo para cada base.
 
 ## Funcionalidades
 - Conexão dinâmica com diferentes bancos de dados usando SQLAlchemy.
@@ -10,13 +10,13 @@ Este projeto tem como objetivo acessar múltiplos bancos de dados (PostgreSQL, M
 
 ## Estrutura do Projeto
 ```
-├── conn.yaml                # Arquivo de credenciais
-├── conn-example.yaml        # Exemplo de configuração de credenciais
-├── requirements.txt         # Dependências do projeto
-├── main.py                  # Script principal
+├── conn_profiles.yaml                # Arquivo de credenciais
+├── conn_profiles.example.yaml        # Exemplo de configuração de credenciais
+├── requirements.txt                  # Dependências do projeto
+├── main.py                           # Script principal
 ├── sql/
-│   └── exemplo.sql          # Exemplo de query SQL
-└── out/                     # (Gerado) Planilhas exportadas
+│   └── exemplo.sql                   # Exemplo de query SQL
+└── out/                              # (Gerado) Planilhas exportadas
 ```
 
 ## Como usar
@@ -49,6 +49,13 @@ databases:
 
 ### 3. Crie sua query
 Salve sua consulta SQL na pasta `sql/` (ex: `minha_query.sql`).
+
+
+### 4. Edite a query da função get_all_databases()
+Altere a query para pegar os nomes das databases de acordo com as suas condições.
+
+#### Pega todos os nomes de databases em uma instância do postgres.
+Ex: "SELECT datname FROM pg_database" 
 
 ### 4. Execute o script
 ```bash
