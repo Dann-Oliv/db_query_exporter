@@ -1,6 +1,4 @@
 # Author: Danilo Oliveira (https://github.com/Dann-Oliv)
-# o intuito deste script é acessar databases diferentes mas com estruturas iguais
-# e gerar de forma rápida planilhas com o resultado do SELECT inserido
 # Compatível com MySql e PostgreSQL
 
 import logging
@@ -106,30 +104,24 @@ def get_sqlalchemy_engine(
     match credentials["engine"]:
         case "postgres":
             conn_string = f"postgresql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
-            logging.debug(
+            logging.info(
                 f"Criando engine Postgres para : {target_database or database}"
             )
             return sqlalchemy.create_engine(conn_string)
 
         case "mysql":
             conn_string = f"mysql+pymysql://{username}:{urllib.parse.quote(password)}@{host}:{port}/{target_database or database}"
-            logging.debug(f"Criando engine MySQL para: {target_database or database}")
+            logging.info(f"Criando engine MySQL para: {target_database or database}")
             return sqlalchemy.create_engine(conn_string)
 
     raise SystemExit("Tipo de engine não reconhecido: {}".format(credentials["engine"]))
 
 
 def get_all_databases(engine: sqlalchemy.engine.Engine) -> list:
-    # Query para pegar todos os bancos de produção ativos no integrador.
+    # Insira a query para pegar o nome das databases com as suas condições.
     query = """
-    SELECT  (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] AS nome_databases
-    FROM "CONTROLE_EMPRESAS"
-    WHERE "CTE_COD_SIS" IN (3,10) 
-    AND "CTE_DT_LIMITE" > NOW() 
-    AND "CTE_STRINGPGSQL" IS NOT NULL
-    AND (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1] != 'teste'
-    ORDER BY (regexp_match("CTE_STRINGPGSQL",'Database=(.*);Pooling'))[1]
-    -- LIMIT 1
+    SELECT datname 
+    FROM pg_database
     """
     all_databases = []
 
