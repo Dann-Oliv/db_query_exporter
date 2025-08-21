@@ -1,7 +1,7 @@
+conn_profiles.yaml
 log.txt
-conn.yaml
+out/*
 sql/*
-/out
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
